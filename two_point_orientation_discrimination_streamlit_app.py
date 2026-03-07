@@ -312,7 +312,7 @@ def reset_all() -> None:
 def ui_snapshot() -> Dict[str, Any]:
     return {
         "selected_hand": st.session_state.get("selected_hand", "右手"),
-        "selected_finger": st.session_state.get("selected_finger", "中指"),
+        "selected_finger": st.session_state.get("selected_finger", "示指"),
         "main_series_name": st.session_state.get("main_series_name", "系列1"),
         "main_random_seed_input": st.session_state.get("main_random_seed_input", ""),
     }
@@ -320,14 +320,14 @@ def ui_snapshot() -> Dict[str, Any]:
 
 def selected_site_label(hand: Optional[str] = None, finger: Optional[str] = None) -> str:
     hand_text = str(hand if hand is not None else st.session_state.get("selected_hand", "右手"))
-    finger_text = str(finger if finger is not None else st.session_state.get("selected_finger", "中指"))
+    finger_text = str(finger if finger is not None else st.session_state.get("selected_finger", "示指"))
     return f"{hand_text} / {finger_text}"
 
 
 def common_log_fields() -> Dict[str, Any]:
     snap = ui_snapshot()
     hand = str(snap.get("selected_hand", "右手"))
-    finger = str(snap.get("selected_finger", "中指"))
+    finger = str(snap.get("selected_finger", "示指"))
     return {
         "selected_hand": hand,
         "selected_finger": finger,
@@ -929,7 +929,7 @@ with st.sidebar:
     st.selectbox(
         "指",
         options=FINGER_OPTIONS,
-        index=FINGER_OPTIONS.index("中指"),
+        index=FINGER_OPTIONS.index("示指"),
         key="selected_finger",
         disabled=ui_locked,
     )
