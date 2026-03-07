@@ -46,6 +46,9 @@ TEST_CEIL_FAIL_STREAK = 2
 ORIENTATION_MAP = {1: "縦", 2: "横"}
 ORIENTATION_REVERSE_MAP = {"縦": 1, "横": 2}
 
+HAND_OPTIONS = ["右手", "左手"]
+FINGER_OPTIONS = ["母指", "示指", "中指", "環指", "小指"]
+
 PHASE_LABELS = {
     "practice": "練習",
     "test": "本番",
@@ -308,13 +311,27 @@ def reset_all() -> None:
 
 def ui_snapshot() -> Dict[str, Any]:
     return {
+        "selected_hand": st.session_state.get("selected_hand", "右手"),
+        "selected_finger": st.session_state.get("selected_finger", "中指"),
         "main_series_name": st.session_state.get("main_series_name", "系列1"),
         "main_random_seed_input": st.session_state.get("main_random_seed_input", ""),
     }
 
 
+def selected_site_label(hand: Optional[str] = None, finger: Optional[str] = None) -> str:
+    hand_text = str(hand if hand is not None else st.session_state.get("selected_hand", "右手"))
+    finger_text = str(finger if finger is not None else st.session_state.get("selected_finger", "中指"))
+    return f"{hand_text} / {finger_text}"
+
+
 def common_log_fields() -> Dict[str, Any]:
+    snap = ui_snapshot()
+    hand = str(snap.get("selected_hand", "右手"))
+    finger = str(snap.get("selected_finger", "中指"))
     return {
+        "selected_hand": hand,
+        "selected_finger": finger,
+        "selected_site": f"{hand}-{finger}",
         "all_dome_levels_mm": levels_text(DOME_LEVELS_MM),
     }
 
@@ -900,7 +917,23 @@ ui_locked = mode != "idle"
 
 with st.sidebar:
     st.header("⚙️ 設定")
-    st.caption("被検者情報の入力欄は省略しています。")
+
+    st.subheader("手と指")
+    st.selectbox(
+        "手",
+        options=HAND_OPTIONS,
+        index=HAND_OPTIONS.index("右手"),
+        key="selected_hand",
+        disabled=ui_locked,
+    )
+    st.selectbox(
+        "指",
+        options=FINGER_OPTIONS,
+        index=FINGER_OPTIONS.index("中指"),
+        key="selected_finger",
+        disabled=ui_locked,
+    )
+    st.caption(f"現在の設定: {selected_site_label()}")
 
     st.subheader("本番系列")
     series_name = st.selectbox(
@@ -961,6 +994,8 @@ elif mode == "test":
     st.success("本番モード")
 elif mode == "post":
     st.success("事後モード")
+
+st.caption(f"選択部位: {selected_site_label()}")
 
 phase_summaries = st.session_state.get("phase_summaries") or {}
 sc1, sc2, sc3 = st.columns(3)
@@ -1061,6 +1096,7 @@ if any(value is not None for value in phase_summaries.values()):
     practice_summary = phase_summaries.get("practice")
     if practice_summary is not None:
         with st.expander("練習の詳細", expanded=False):
+            st.write(f"部位: **{practice_summary.get('selected_site', selected_site_label(practice_summary.get('selected_hand'), practice_summary.get('selected_finger')))}**")
             st.write(f"判定: **{practice_summary['result_label']}**")
             st.write(f"理由: **{practice_summary['reason_text']}**")
             st.write(f"trial数: **{practice_summary['trials']}**")
@@ -1070,6 +1106,7 @@ if any(value is not None for value in phase_summaries.values()):
     test_summary = phase_summaries.get("test")
     if test_summary is not None:
         with st.expander("本番の詳細", expanded=True):
+            st.write(f"部位: **{test_summary.get('selected_site', selected_site_label(test_summary.get('selected_hand'), test_summary.get('selected_finger')))}**")
             st.write(f"判定: **{test_summary['result_label']}**")
             st.write(f"理由: **{test_summary['reason_text']}**")
             st.write(f"trial数: **{test_summary['trials']}**")
@@ -1105,6 +1142,7 @@ if any(value is not None for value in phase_summaries.values()):
     post_summary = phase_summaries.get("post")
     if post_summary is not None:
         with st.expander("事後の詳細", expanded=False):
+            st.write(f"部位: **{post_summary.get('selected_site', selected_site_label(post_summary.get('selected_hand'), post_summary.get('selected_finger')))}**")
             st.write(f"判定: **{post_summary['result_label']}**")
             st.write(f"理由: **{post_summary['reason_text']}**")
             st.write(f"trial数: **{post_summary['trials']}**")
