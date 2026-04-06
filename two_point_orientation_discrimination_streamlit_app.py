@@ -168,6 +168,166 @@ def format_schedule_labels(seq: Sequence[int], per_line: int = 25) -> str:
     return "\n".join(lines)
 
 
+def compute_test_threshold_summary(reversal_levels: Sequence[float]) -> Dict[str, Any]:
+    levels = [float(x) for x in reversal_levels]
+    total_reversals = len(levels)
+
+    if total_reversals >= TEST_REVERSAL_TARGET:
+        used_levels = levels[-TEST_THRESHOLD_LAST_N:]
+        threshold_mm = float(np.median(used_levels))
+        return {
+            "threshold_mm": threshold_mm,
+            "threshold_kind": "formal",
+            "threshold_label": "閾値",
+            "threshold_detail": f"最後の{TEST_THRESHOLD_LAST_N} reversal の中央値",
+            "threshold_used_levels": used_levels,
+        }
+
+    if total_reversals >= 6:
+        used_levels = levels[4:]
+        threshold_mm = float(np.median(used_levels))
+        return {
+            "threshold_mm": threshold_mm,
+            "threshold_kind": "reference",
+            "threshold_label": "参考値",
+            "threshold_detail": "first 4 reversals を除外後、残り reversal の中央値",
+            "threshold_used_levels": used_levels,
+        }
+
+    return {
+        "threshold_mm": None,
+        "threshold_kind": None,
+        "threshold_label": "参考値",
+        "threshold_detail": "6 reversal 未満のため算出なし",
+        "threshold_used_levels": [],
+    }
+
+
+def build_test_progress_chart(df_logs: pd.DataFrame, phase_run: int) -> Optional[Dict[str, Any]]:
+    test_df = df_logs[(df_logs["phase"] == "test") & (df_logs["phase_run"] == int(phase_run))].copy()
+    if test_df.empty:
+        return None
+
+    test_df["phase_trial"] = pd.to_numeric(test_df["phase_trial"], errors="coerce")
+    test_df["size_mm"] = pd.to_numeric(test_df["size_mm"], errors="coerce")
+    test_df = test_df.dropna(subset=["phase_trial", "size_mm"])
+    if test_df.empty:
+        return None
+
+    reversal_df = test_df[test_df["reversal"] == True].copy()  # noqa: E712
+    reversal_values: List[Dict[str, Any]] = []
+    if not reversal_df.empty:
+        reversal_df["reversal_level_mm"] = pd.to_numeric(reversal_df["reversal_level_mm"], errors="coerce")
+        reversal_df = reversal_df.dropna(subset=["reversal_level_mm"])
+        reversal_df["reversal_marker_group"] = np.where(
+            pd.to_numeric(reversal_df["n_reversals"], errors="coerce") <= 4,
+            "first 4 reversal",
+            "after first 4",
+        )
+        reversal_values = reversal_df[
+            ["phase_trial", "reversal_level_mm", "n_reversals", "reversal_marker_group"]
+        ].rename(columns={"reversal_level_mm": "size_mm"}).to_dict(orient="records")
+
+    line_values = test_df.replace({np.nan: None}).to_dict(orient="records")
+    point_values = pd.DataFrame(reversal_values).replace({np.nan: None}).to_dict(orient="records")
+
+    return {
+        "height": 320,
+        "layer": [
+            {
+                "data": {"values": line_values},
+                "mark": {"type": "line", "color": "#475569", "strokeWidth": 2.5},
+                "encoding": {
+                    "x": {"field": "phase_trial", "type": "quantitative", "title": "施行回数"},
+                    "y": {"field": "size_mm", "type": "quantitative", "title": "dome サイズ (mm)"},
+                    "tooltip": [
+                        {"field": "phase_trial", "type": "quantitative", "title": "trial"},
+                        {"field": "size_mm", "type": "quantitative", "title": "size", "format": ".2f"},
+                        {"field": "orientation_presented", "type": "nominal", "title": "提示"},
+                        {"field": "answer", "type": "nominal", "title": "回答"},
+                        {"field": "correct", "type": "nominal", "title": "正誤"},
+                    ],
+                },
+            },
+            {
+                "data": {"values": point_values},
+                "mark": {"type": "point", "shape": "square", "filled": True, "size": 130},
+                "encoding": {
+                    "x": {"field": "phase_trial", "type": "quantitative", "title": "施行回数"},
+                    "y": {"field": "size_mm", "type": "quantitative", "title": "dome サイズ (mm)"},
+                    "color": {
+                        "field": "reversal_marker_group",
+                        "type": "nominal",
+                        "title": "reversal",
+                        "scale": {
+                            "domain": ["first 4 reversal", "after first 4"],
+                            "range": ["#2563eb", "#dc2626"],
+                        },
+                    },
+                    "tooltip": [
+                        {"field": "phase_trial", "type": "quantitative", "title": "trial"},
+                        {"field": "size_mm", "type": "quantitative", "title": "reversal level", "format": ".2f"},
+                        {"field": "n_reversals", "type": "quantitative", "title": "reversal count"},
+                    ],
+                },
+            },
+        ],
+    }
+
+
+def build_test_summary_text(summary: Dict[str, Any]) -> str:
+    threshold_mm = summary.get("threshold_mm")
+    nearest_dome_mm = summary.get("nearest_dome_mm")
+    threshold_label = str(summary.get("threshold_label", "閾値"))
+    threshold_detail = str(summary.get("threshold_detail", ""))
+    threshold_used_levels = summary.get("threshold_used_levels") or []
+    reversal_levels = summary.get("reversal_levels") or []
+    series_seed = summary.get("series_seed")
+
+    lines = [
+        "Two-Point Orientation Discrimination - Main Test Summary",
+        "",
+        f"部位: {summary.get('selected_site', '')}",
+        f"判定: {summary.get('result_label', '')}",
+        f"理由: {summary.get('reason_text', '')}",
+        f"trial数: {summary.get('trials', '')}",
+        f"系列: {summary.get('series_name', '')}",
+        f"seed: {'—' if series_seed is None else series_seed}",
+        f"reversals: {summary.get('reversals', '')}",
+    ]
+
+    if threshold_mm is None:
+        lines.append(f"{threshold_label}: —")
+    else:
+        lines.append(f"{threshold_label}: {format_mm(float(threshold_mm))} mm")
+        lines.append(f"{threshold_label}の算出法: {threshold_detail}")
+        lines.append(f"近い dome: {format_mm(float(nearest_dome_mm))} mm")
+
+    if reversal_levels:
+        lines.append("reversal levels: " + ", ".join(format_mm(float(x)) for x in reversal_levels))
+    if threshold_used_levels:
+        lines.append(
+            f"{threshold_label}に使用した reversal levels: "
+            + ", ".join(format_mm(float(x)) for x in threshold_used_levels)
+        )
+
+    lines.extend(
+        [
+            "",
+            "1 = 縦",
+            "2 = 横",
+            "",
+            "[codes]",
+            format_schedule_codes(summary.get("schedule") or []),
+            "",
+            "[labels]",
+            format_schedule_labels(summary.get("schedule") or []),
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 @dataclass
 class DiscreteTwoDownOneUpStaircase:
     levels: List[float]
@@ -292,9 +452,11 @@ def init_state() -> None:
     defaults: Dict[str, Any] = {
         "mode": "idle",
         "last_feedback": None,
+        "ui_error": None,
         "logs": [],
         "phase_runs": {"practice": 0, "test": 0, "post": 0},
         "phase_summaries": {"practice": None, "test": None, "post": None},
+        "phase_summary_history": {"practice": [], "test": [], "post": []},
         "practice_state": None,
         "test_state": None,
         "post_state": None,
@@ -343,6 +505,28 @@ def next_run_number(phase: str) -> int:
     return int(runs[str(phase)])
 
 
+def begin_phase(phase: str) -> int:
+    run_no = next_run_number(phase)
+    st.session_state["mode"] = phase
+    st.session_state["last_feedback"] = None
+    st.session_state["ui_error"] = None
+    for phase_name in PHASE_LABELS:
+        st.session_state[f"{phase_name}_state"] = None
+    return run_no
+
+
+def record_phase_summary(phase: str, summary: Dict[str, Any]) -> None:
+    phase_summaries = dict(st.session_state.get("phase_summaries") or {})
+    phase_summaries[phase] = summary
+    st.session_state["phase_summaries"] = phase_summaries
+
+    history = dict(st.session_state.get("phase_summary_history") or {})
+    phase_history = list(history.get(phase) or [])
+    phase_history.append(summary)
+    history[phase] = phase_history
+    st.session_state["phase_summary_history"] = history
+
+
 def get_test_schedule(series_name: str, raw_seed: str) -> tuple[List[int], Optional[int]]:
     if series_name == "系列1":
         return list(TEST_SERIES_1), None
@@ -355,29 +539,26 @@ def get_test_schedule(series_name: str, raw_seed: str) -> tuple[List[int], Optio
 
 
 def start_easy_phase(phase: str) -> None:
-    run_no = next_run_number(phase)
+    run_no = begin_phase(phase)
     salt = 1000 if phase == "practice" else 2000
     seed = choose_seed("", salt=run_no + salt)
     schedule = generate_random_series(PRACTICE_SCHEDULE_LEN, seed)
-    st.session_state["mode"] = phase
     st.session_state[f"{phase}_state"] = EasyPhaseState(
         phase=phase,
         phase_run=run_no,
         seed=seed,
         schedule=schedule,
     )
-    st.session_state["last_feedback"] = None
 
 
 def start_test() -> None:
-    run_no = next_run_number("test")
     snap = ui_snapshot()
     series_name = str(snap.get("main_series_name", "系列1"))
     raw_seed = str(snap.get("main_random_seed_input", ""))
     schedule, actual_seed = get_test_schedule(series_name, raw_seed)
+    run_no = begin_phase("test")
     start_index = DOME_LEVELS_MM.index(TEST_START_MM)
     staircase = DiscreteTwoDownOneUpStaircase(levels=list(DOME_LEVELS_MM), start_index=start_index)
-    st.session_state["mode"] = "test"
     st.session_state["test_state"] = MainPhaseState(
         phase_run=run_no,
         series_name=series_name,
@@ -385,7 +566,6 @@ def start_test() -> None:
         schedule=schedule,
         staircase=staircase,
     )
-    st.session_state["last_feedback"] = None
 
 
 def finalize_easy_phase(phase: str, reason: str) -> None:
@@ -410,9 +590,7 @@ def finalize_easy_phase(phase: str, reason: str) -> None:
         "completed_at_unix": float(time.time()),
     }
 
-    phase_summaries = dict(st.session_state.get("phase_summaries") or {})
-    phase_summaries[phase] = summary
-    st.session_state["phase_summaries"] = phase_summaries
+    record_phase_summary(phase, summary)
     st.session_state[f"{phase}_state"] = None
     st.session_state["mode"] = "idle"
 
@@ -424,7 +602,8 @@ def finalize_test_phase(reason: str) -> None:
         return
 
     staircase = state.staircase
-    threshold_mm = staircase.threshold_median(TEST_THRESHOLD_LAST_N)
+    threshold_summary = compute_test_threshold_summary(staircase.reversal_levels())
+    threshold_mm = threshold_summary["threshold_mm"]
     nearest_dome_mm = nearest_level(staircase.levels, threshold_mm)
 
     if reason == "floor_correct_pass":
@@ -453,6 +632,10 @@ def finalize_test_phase(reason: str) -> None:
         "reversals": int(len(staircase.reversals)),
         "reversal_levels": staircase.reversal_levels(),
         "threshold_mm": threshold_mm,
+        "threshold_kind": threshold_summary["threshold_kind"],
+        "threshold_label": threshold_summary["threshold_label"],
+        "threshold_detail": threshold_summary["threshold_detail"],
+        "threshold_used_levels": list(threshold_summary["threshold_used_levels"]),
         "nearest_dome_mm": nearest_dome_mm,
         "final_level_mm": float(staircase.current_level()),
         "floor_correct_streak_end": int(state.floor_correct_streak),
@@ -460,11 +643,15 @@ def finalize_test_phase(reason: str) -> None:
         "completed_at_unix": float(time.time()),
     }
 
-    phase_summaries = dict(st.session_state.get("phase_summaries") or {})
-    phase_summaries["test"] = summary
-    st.session_state["phase_summaries"] = phase_summaries
+    record_phase_summary("test", summary)
     st.session_state["test_state"] = None
     st.session_state["mode"] = "idle"
+
+
+def format_start_error(exc: Exception) -> str:
+    if isinstance(exc, ValueError):
+        return f"開始できませんでした: {exc}"
+    return "開始できませんでした。設定を見直して再試行してください。"
 
 
 def stop_active_phase() -> None:
@@ -884,10 +1071,11 @@ def render_phase_summary_card(phase: str, summary: Optional[Dict[str, Any]]) -> 
         meta_lines.append(f"series: {summary.get('series_name', '—')}")
         meta_lines.append(f"reversals: {summary.get('reversals', '—')}")
         thr = summary.get("threshold_mm")
+        thr_label = str(summary.get("threshold_label", "threshold"))
         if thr is None:
-            meta_lines.append("threshold: —")
+            meta_lines.append(f"{thr_label}: —")
         else:
-            meta_lines.append(f"threshold: {format_mm(float(thr))} mm")
+            meta_lines.append(f"{thr_label}: {format_mm(float(thr))} mm")
     else:
         meta_lines.append(f"final dome: {format_mm(float(summary.get('final_level_mm', 0.0)))} mm")
 
@@ -909,7 +1097,7 @@ init_state()
 
 st.title(APP_TITLE)
 st.caption(
-    "JVP dome 用の検査者補助アプリ。練習 → 本番 → 事後の流れで、縦/横回答と 2-down 1-up staircase を記録します。"
+    "JVP dome 用の検査者補助アプリ。練習・本番・事後を必要に応じて開始し、縦/横回答と 2-down 1-up staircase を記録します。"
 )
 
 mode = st.session_state.get("mode", "idle")
@@ -976,7 +1164,7 @@ with c2:
             start_test()
             st.rerun()
         except Exception as exc:  # noqa: BLE001
-            st.error(f"本番を開始できませんでした: {exc}")
+            st.session_state["ui_error"] = format_start_error(exc)
 with c3:
     if st.button("事後", disabled=mode != "idle", use_container_width=True):
         start_easy_phase("post")
@@ -995,9 +1183,13 @@ elif mode == "test":
 elif mode == "post":
     st.success("事後モード")
 
+if st.session_state.get("ui_error"):
+    st.error(str(st.session_state["ui_error"]))
+
 st.caption(f"選択部位: {selected_site_label()}")
 
 phase_summaries = st.session_state.get("phase_summaries") or {}
+phase_summary_history = st.session_state.get("phase_summary_history") or {}
 sc1, sc2, sc3 = st.columns(3)
 with sc1:
     render_phase_summary_card("practice", phase_summaries.get("practice"))
@@ -1035,9 +1227,9 @@ if mode == "test":
         thr_live = staircase.threshold_median(TEST_THRESHOLD_LAST_N)
         thr_nearest = nearest_level(staircase.levels, thr_live)
 
-        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        m1, m2, m3, m4, m5 = st.columns([1.35, 1.15, 1.0, 1.0, 1.0])
         with m1:
-            st.metric("trial", f"{state.trial_n + 1} / {TEST_MAX_TRIALS}")
+            st.metric("trial", f"{state.trial_n + 1}/{TEST_MAX_TRIALS}")
         with m2:
             st.metric("現在mm", f"{format_mm(staircase.current_level())} mm")
         with m3:
@@ -1046,8 +1238,7 @@ if mode == "test":
             st.metric("暫定閾値", "—" if thr_live is None else f"{format_mm(thr_live)} mm")
         with m5:
             st.metric("近いdome", "—" if thr_nearest is None else f"{format_mm(thr_nearest)} mm")
-        with m6:
-            st.metric("系列", state.series_name)
+        st.caption(f"系列: {state.series_name}")
 
         st.caption(
             "本番: 2連続正答で1段階小さく、1回誤答で1段階大きく。"
@@ -1089,9 +1280,12 @@ if trial is not None:
 if st.session_state.get("last_feedback"):
     st.write(st.session_state["last_feedback"])
 
+logs = st.session_state.get("logs") or []
+
 if any(value is not None for value in phase_summaries.values()):
     st.divider()
     st.subheader("詳細結果")
+    st.caption("各フェーズの詳細は最新 run を表示しています。過去 run は下の履歴で確認できます。")
 
     practice_summary = phase_summaries.get("practice")
     if practice_summary is not None:
@@ -1115,27 +1309,35 @@ if any(value is not None for value in phase_summaries.values()):
                 st.write(f"seed: **{test_summary['series_seed']}**")
             st.write(f"reversals: **{test_summary['reversals']}**")
             if test_summary.get("threshold_mm") is None:
-                st.write("閾値: **—**（まだ6 reversal 未満）")
+                st.write(f"{test_summary.get('threshold_label', '参考値')}: **—**（まだ6 reversal 未満）")
             else:
-                st.write(f"閾値（最後の{TEST_THRESHOLD_LAST_N} reversal の中央値）: **{format_mm(test_summary['threshold_mm'])} mm**")
+                st.write(
+                    f"{test_summary.get('threshold_label', '閾値')}（{test_summary.get('threshold_detail', '')}）: "
+                    f"**{format_mm(test_summary['threshold_mm'])} mm**"
+                )
                 st.write(f"近い dome: **{format_mm(test_summary['nearest_dome_mm'])} mm**")
             reversal_levels = test_summary.get("reversal_levels") or []
             if reversal_levels:
                 st.caption("reversal levels: " + ", ".join(format_mm(x) for x in reversal_levels))
+            threshold_used_levels = test_summary.get("threshold_used_levels") or []
+            if threshold_used_levels:
+                st.caption(
+                    f"{test_summary.get('threshold_label', '閾値')}に使用した reversal levels: "
+                    + ", ".join(format_mm(x) for x in threshold_used_levels)
+                )
 
-            schedule_text = (
-                "1 = 縦\n"
-                "2 = 横\n\n"
-                "[codes]\n"
-                + format_schedule_codes(test_summary.get("schedule") or [])
-                + "\n\n[labels]\n"
-                + format_schedule_labels(test_summary.get("schedule") or [])
-                + "\n"
-            )
+            if logs:
+                df_logs = pd.DataFrame(logs)
+                chart = build_test_progress_chart(df_logs, int(test_summary["phase_run"]))
+                if chart is not None:
+                    st.vega_lite_chart(chart, use_container_width=True)
+                    st.caption("青四角: first 4 reversals / 赤四角: それ以降の reversals")
+
+            schedule_text = build_test_summary_text(test_summary)
             st.download_button(
-                "本番系列をテキストでダウンロード",
+                "本番結果と系列をテキストでダウンロード",
                 data=schedule_text.encode("utf-8"),
-                file_name="two_point_orientation_discrimination_test_schedule.txt",
+                file_name="two_point_orientation_discrimination_test_summary.txt",
                 mime="text/plain",
             )
 
@@ -1149,7 +1351,31 @@ if any(value is not None for value in phase_summaries.values()):
             st.write(f"最終 dome: **{format_mm(post_summary['final_level_mm'])} mm**")
             st.write(f"乱数 seed: **{post_summary['seed']}**")
 
-logs = st.session_state.get("logs") or []
+if any(phase_summary_history.get(phase) for phase in PHASE_LABELS):
+    st.divider()
+    st.subheader("実施履歴")
+    history_rows: List[Dict[str, Any]] = []
+    for phase in PHASE_LABELS:
+        for summary in phase_summary_history.get(phase) or []:
+            row = {
+                "phase": summary.get("phase_label", PHASE_LABELS[phase]),
+                "run": summary.get("phase_run"),
+                "result": summary.get("result_label"),
+                "reason": summary.get("reason_text"),
+                "trials": summary.get("trials"),
+                "site": summary.get("selected_site"),
+            }
+            if phase == "test":
+                row["series"] = summary.get("series_name")
+                row["threshold_label"] = summary.get("threshold_label")
+                row["threshold_mm"] = summary.get("threshold_mm")
+                row["reversals"] = summary.get("reversals")
+            else:
+                row["final_level_mm"] = summary.get("final_level_mm")
+            history_rows.append(row)
+    history_df = pd.DataFrame(history_rows)
+    st.dataframe(history_df, use_container_width=True, height=220)
+
 if logs:
     st.divider()
     st.subheader("ログ")

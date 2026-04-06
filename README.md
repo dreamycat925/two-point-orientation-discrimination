@@ -18,10 +18,12 @@ The app displays:
 - response buttons for the examiner to record the participant's answer,
 - and a running summary of the current phase, trial count, reversals, and provisional threshold.
 
-The app follows a simple workflow:
+The app supports a simple workflow:
 1. **Practice**
 2. **Main test**
 3. **Post-test check**
+
+These phases are usually performed in the order above, but the UI allows the examiner to start **Practice** or **Main test** first as needed.
 
 ## Dome Sizes
 
@@ -68,6 +70,13 @@ The app displays a provisional threshold as:
 
 - **median of the last 6 reversals**
 
+### Threshold / reference value at the end of the main test
+
+- If **10 reversals** are reached, the app reports the formal threshold as the **median of the last 6 reversals**
+- If the test ends without convergence and there are **6 to 9 reversals**, the app reports a **reference value**
+- This reference value is calculated as the **median of the reversals after discarding the first 4 reversals**
+- If there are **5 or fewer reversals**, no threshold/reference value is reported
+
 ## Post-Test Check
 
 The post-test check uses the **same rules as the practice phase**.
@@ -78,13 +87,21 @@ This gives a simple indirect check of whether task engagement and performance re
 
 The app can export:
 - a **CSV log** containing all phases,
-- and the **orientation schedule** used in the main test.
+- the **orientation schedule** used in the main test,
+- a **text summary** of the main test with the schedule,
+- and on-screen summaries of the **latest run** for each phase.
+
+If a phase is repeated, earlier runs remain in the CSV log and in the app's run history table.
+
+The main test detail view also shows a line chart of dome size by trial, with reversal markers:
+- **blue squares** for the first 4 reversals
+- **red squares** for later reversals
 
 ## Quick Use
 
 1. Open the live app.
-2. Run the **practice phase**.
-3. Start the **main test**.
+2. Run the **practice phase** or start the **main test**, depending on your procedure.
+3. Run the remaining phase.
 4. Run the **post-test check**.
 5. Download the **CSV log** if needed.
 
