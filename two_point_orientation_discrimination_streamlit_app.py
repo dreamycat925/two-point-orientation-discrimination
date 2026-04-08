@@ -1097,7 +1097,7 @@ init_state()
 
 st.title(APP_TITLE)
 st.caption(
-    "JVP dome 用の検査者補助アプリ。練習・本番・事後を必要に応じて開始し、縦/横回答と 2-down 1-up staircase を記録します。"
+    "JVP dome 用の検査者補助アプリ。刺激時間は1秒。練習・本番・事後を必要に応じて開始し、縦/横回答と 2-down 1-up staircase を記録します。"
 )
 
 mode = st.session_state.get("mode", "idle")
@@ -1143,10 +1143,10 @@ with st.sidebar:
     st.caption("Blank dome は使いません。")
 
     st.markdown("**練習 / 事後**")
-    st.caption("8 mm 開始。5問連続正答で PASS。8 mm で2問誤答→10 mm、10 mm で2問誤答→12 mm、12 mm で2問誤答→FAIL。")
+    st.caption("刺激時間は1秒。8 mm 開始。5問連続正答で PASS。8 mm で2問誤答→10 mm、10 mm で2問誤答→12 mm、12 mm で2問誤答→FAIL。")
 
     st.markdown("**本番**")
-    st.caption("8 mm 開始。2連続正答で1段階小さく、1回誤答で1段階大きく。0.35 mm で4連続正答=PASS、12 mm で2連続誤答=FAIL、10 reversals で終了、100 trial で収束不良。")
+    st.caption("刺激時間は1秒。8 mm 開始。2連続正答で1段階小さく、1回誤答で1段階大きく。0.35 mm で4連続正答=PASS、12 mm で2連続誤答=FAIL、10 reversals で終了、100 trial で収束不良。")
 
     st.divider()
     if st.button("リセット（全消去）"):
@@ -1216,7 +1216,7 @@ if mode in ("practice", "post"):
             st.metric("累積誤答", f"{state.total_errors}")
 
         st.caption(
-            "練習/事後: 8 mm 開始、5問連続正答で PASS。"
+            "練習/事後: 刺激時間は1秒。8 mm 開始、5問連続正答で PASS。"
             " 8 mm で2問誤答→10 mm、10 mm で2問誤答→12 mm、12 mm で2問誤答→FAIL。"
         )
 
@@ -1241,7 +1241,7 @@ if mode == "test":
         st.caption(f"系列: {state.series_name}")
 
         st.caption(
-            "本番: 2連続正答で1段階小さく、1回誤答で1段階大きく。"
+            "本番: 刺激時間は1秒。2連続正答で1段階小さく、1回誤答で1段階大きく。"
             f" 0.35 mm 連続正答 {state.floor_correct_streak}/{TEST_FLOOR_PASS_STREAK}、"
             f" 12 mm 連続誤答 {state.ceil_incorrect_streak}/{TEST_CEIL_FAIL_STREAK}。"
         )

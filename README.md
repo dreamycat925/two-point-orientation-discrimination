@@ -15,6 +15,7 @@ This app is designed to support examiner-operated testing for **grating orientat
 The app displays:
 - the **next dome size** to use,
 - the **next orientation** to present (**vertical** or **horizontal**),
+- the **stimulus duration** (**1 second**),
 - response buttons for the examiner to record the participant's answer,
 - and a running summary of the current phase, trial count, reversals, and provisional threshold.
 
@@ -122,4 +123,5 @@ For Docker-based local use, see **README_DOCKER.md**.
 
 - This app is intended as an **examiner support tool**.
 - It is not a medical device.
+- The **stimulus duration is 1 second**.
 - Testing conditions, participant attention, and examiner technique can affect results.
