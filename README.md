@@ -17,6 +17,7 @@ The app displays:
 - the **next orientation** to present (**vertical** or **horizontal**),
 - the **stimulus duration** (**1 second**),
 - response buttons for the examiner to record the participant's answer,
+- an **undo button** to cancel the immediately previous response and return to the prior trial,
 - and a running summary of the current phase, trial count, reversals, and provisional threshold.
 
 The app supports a simple workflow:
@@ -104,7 +105,8 @@ The main test detail view also shows a line chart of dome size by trial, with re
 2. Run the **practice phase** or start the **main test**, depending on your procedure.
 3. Run the remaining phase.
 4. Run the **post-test check**.
-5. Download the **CSV log** if needed.
+5. If the examiner presses the wrong answer button, use **Undo** to cancel the most recent response and return to the previous trial.
+6. Download the **CSV log** if needed.
 
 ## Local / Docker
 

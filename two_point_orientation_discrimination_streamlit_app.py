@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import html
 import time
 from dataclasses import dataclass, field
@@ -453,6 +454,7 @@ def init_state() -> None:
         "mode": "idle",
         "last_feedback": None,
         "ui_error": None,
+        "undo_stack": [],
         "logs": [],
         "phase_runs": {"practice": 0, "test": 0, "post": 0},
         "phase_summaries": {"practice": None, "test": None, "post": None},
@@ -510,6 +512,7 @@ def begin_phase(phase: str) -> int:
     st.session_state["mode"] = phase
     st.session_state["last_feedback"] = None
     st.session_state["ui_error"] = None
+    st.session_state["undo_stack"] = []
     for phase_name in PHASE_LABELS:
         st.session_state[f"{phase_name}_state"] = None
     return run_no
@@ -667,6 +670,43 @@ def stop_active_phase() -> None:
         finalize_test_phase("manual_stop")
 
 
+UNDO_STATE_KEYS = [
+    "mode",
+    "last_feedback",
+    "ui_error",
+    "logs",
+    "phase_runs",
+    "phase_summaries",
+    "phase_summary_history",
+    "practice_state",
+    "test_state",
+    "post_state",
+]
+
+
+def push_undo_snapshot() -> None:
+    snapshot = {key: copy.deepcopy(st.session_state.get(key)) for key in UNDO_STATE_KEYS}
+    undo_stack = list(st.session_state.get("undo_stack") or [])
+    undo_stack.append(snapshot)
+    st.session_state["undo_stack"] = undo_stack
+
+
+def can_undo_last_answer() -> bool:
+    return bool(st.session_state.get("undo_stack"))
+
+
+def undo_last_answer() -> None:
+    undo_stack = list(st.session_state.get("undo_stack") or [])
+    if not undo_stack:
+        return
+
+    snapshot = undo_stack.pop()
+    for key, value in snapshot.items():
+        st.session_state[key] = value
+    st.session_state["undo_stack"] = undo_stack
+    st.session_state["last_feedback"] = "直前の回答を取り消しました。"
+
+
 def current_trial_info() -> Optional[Dict[str, Any]]:
     mode = st.session_state.get("mode")
 
@@ -714,6 +754,8 @@ def handle_easy_answer(answer_label: str) -> None:
     state: Optional[EasyPhaseState] = st.session_state.get(f"{mode}_state")
     if state is None:
         return
+
+    push_undo_snapshot()
 
     phase_label = PHASE_LABELS[mode]
     trial_index = int(state.trial_n + 1)
@@ -815,6 +857,8 @@ def handle_test_answer(answer_label: str) -> None:
     state: Optional[MainPhaseState] = st.session_state.get("test_state")
     if state is None:
         return
+
+    push_undo_snapshot()
 
     staircase = state.staircase
     trial_index = int(state.trial_n + 1)
@@ -1276,6 +1320,9 @@ if trial is not None:
             elif mode == "test":
                 handle_test_answer("横")
             st.rerun()
+    if st.button("ひとつ戻る", use_container_width=True, disabled=not can_undo_last_answer()):
+        undo_last_answer()
+        st.rerun()
 
 if st.session_state.get("last_feedback"):
     st.write(st.session_state["last_feedback"])
