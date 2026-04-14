@@ -1320,7 +1320,13 @@ if trial is not None:
             elif mode == "test":
                 handle_test_answer("横")
             st.rerun()
-    if st.button("ひとつ戻る", use_container_width=True, disabled=not can_undo_last_answer()):
+    if st.button("ひとつ前に戻る", use_container_width=True, disabled=not can_undo_last_answer()):
+        undo_last_answer()
+        st.rerun()
+
+elif can_undo_last_answer():
+    st.caption("終了直後でも、誤入力なら直前の回答を取り消して再開できます。")
+    if st.button("ひとつ前に戻る", use_container_width=True):
         undo_last_answer()
         st.rerun()
 
