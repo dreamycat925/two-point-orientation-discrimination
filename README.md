@@ -13,8 +13,8 @@ Use the public app here:
 This app is designed to support examiner-operated testing for **grating orientation discrimination** using JVP domes.
 
 The app displays:
-- the **next dome size** to use,
-- the **next orientation** to present (**vertical** or **horizontal**),
+- the **dome size** to use,
+- the **orientation** to present (**vertical** or **horizontal**),
 - the **stimulus duration** (**1 second**),
 - response buttons for the examiner to record the participant's answer,
 - an **undo button** to cancel the immediately previous response and return to the prior trial,
