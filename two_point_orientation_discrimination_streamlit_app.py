@@ -1300,9 +1300,9 @@ if trial is not None:
 
     box1, box2 = st.columns([1.18, 0.82])
     with box1:
-        render_big_display("次に使う dome", f"{format_mm(float(trial['size_mm']))} mm", kind="dome")
+        render_big_display("dome", f"{format_mm(float(trial['size_mm']))} mm", kind="dome")
     with box2:
-        render_big_display("次の向き", str(trial["orientation_label"]), kind="orientation")
+        render_big_display("向き", str(trial["orientation_label"]), kind="orientation")
 
     st.markdown("### 患者の回答")
     a1, a2 = st.columns(2)
